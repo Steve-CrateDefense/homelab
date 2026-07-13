@@ -1,0 +1,12 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: lan-l2
+spec:
+  serviceSelector:
+    matchLabels: {}              # {} = announce for all LoadBalancer services
+  interfaces:
+    - ^eno1$                     # your actual NIC, not eth0
+  externalIPs: true
+  loadBalancerIPs: true
+

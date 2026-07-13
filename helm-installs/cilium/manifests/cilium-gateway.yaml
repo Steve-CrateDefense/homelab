@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: cilium-gateway
+  namespace: default
+spec:
+  gatewayClassName: cilium
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80                    # host port Envoy binds in hostNetwork mode
+      allowedRoutes:
+        namespaces:
+          from: All             # only routes in `default` may attach; use All for any ns
+

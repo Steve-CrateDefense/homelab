@@ -1,0 +1,11 @@
+.env
+controlplane.yaml
+worker.yaml
+talosconfig
+
+# defensive
+*.env
+secrets.yaml
+kubeconfig
+*.key
+*.pem

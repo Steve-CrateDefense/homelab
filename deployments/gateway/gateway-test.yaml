@@ -1,0 +1,113 @@
+# =============================================================================
+# Cilium Gateway API smoke test
+#   - Gateway  -> uses the auto-created `cilium` GatewayClass
+#   - echo app -> traefik/whoami (echoes request info, great for route testing)
+#   - HTTPRoute-> matches Host: echo.local and forwards to the echo Service
+#
+# Because your Helm values set gatewayAPI.hostNetwork.enabled=true, Envoy binds
+# this listener on the HOST network of your nodes. You reach it at:
+#     http://<node-ip>:80   (with Host: echo.local)
+# There is NO LoadBalancer IP to wait for.
+#
+# Apply:  kubectl apply -f cilium-gateway-test.yaml
+# =============================================================================
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+spec:
+  gatewayClassName: cilium
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80                    # host port Envoy binds in hostNetwork mode
+      allowedRoutes:
+        namespaces:
+          from: All              # only routes in `default` may attach; use All for any ns
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: default
+  labels:
+    app: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10.2
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo
+  namespace: default
+spec:
+  selector:
+    app: echo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: echo
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  hostnames:
+    - "echo.local"              # drop this line to match any Host header
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: echo
+          port: 80
+---
+# v2 in Cilium 1.18 (v2alpha1 pool is deprecated)
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lan-pool
+spec:
+  blocks:
+    - start: "192.168.0.240"      # MUST be outside your router's DHCP range
+      stop: "192.168.0.250"
+---
+# still v2alpha1 in 1.18 (mixing v2 pool + v2alpha1 policy is correct, not a typo)
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: lan-l2
+spec:
+  serviceSelector:
+    matchLabels: {}              # {} = announce for all LoadBalancer services
+  interfaces:
+    - ^eno1$                     # your actual NIC, not eth0
+  externalIPs: true
+  loadBalancerIPs: true
+

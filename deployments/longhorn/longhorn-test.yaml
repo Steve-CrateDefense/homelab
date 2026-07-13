@@ -1,0 +1,28 @@
+# longhorn-test.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lh-test
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lh-writer
+spec:
+  containers:
+    - name: writer
+      image: busybox:1.36
+      command: ["sh", "-c", "while true; do date >> /data/log.txt; sleep 5; done"]
+      volumeMounts:
+        - name: vol
+          mountPath: /data
+  volumes:
+    - name: vol
+      persistentVolumeClaim:
+        claimName: lh-test
